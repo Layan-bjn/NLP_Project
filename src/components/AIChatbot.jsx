@@ -94,7 +94,7 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
         }));
 
       // استدعاء السيرفر (Express Backend)
-      const response = await fetch('http://localhost:5000/api/chat', {
+      const response = await fetch('https://nlp-project-backend.onrender.com/api/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
