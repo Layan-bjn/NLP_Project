@@ -2,3 +2,5 @@ dist
 node_modules
 .env
 dev-server.log
+.vercel
+.env*

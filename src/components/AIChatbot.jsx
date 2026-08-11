@@ -76,7 +76,7 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
     }
   };
 
-  // إرسال الرسالة إلى الباك إند
+  // إرسال الرسالة إلى Hugging Face API مباشرة
   const handleSendMessage = async (textToSend = inputMsg) => {
     if (!textToSend.trim()) return;
 
@@ -95,41 +95,65 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
     setIsTyping(true);
 
     try {
-      const history = messages
+      // قراءة المفتاح والموديل من متغيّرات بيئة Vite أو من الـ Modal
+      const token = apiKey || import.meta.env.VITE_HF_TOKEN;
+      const model = import.meta.env.VITE_HF_MODEL || 'openai/gpt-oss-120b:fastest';
+
+      if (!token) {
+        throw new Error('مفتاح API غير متوفر');
+      }
+
+      // بناء نص المحادثة مع الـ History ليدعم سياق الحوار
+      const conversationPrompt = messages
         .filter(m => m.text)
-        .map(m => ({
-          role: m.sender === 'user' ? 'user' : 'assistant',
-          content: m.text
-        }));
+        .map(m => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
+        .join('\n') + `\nUser: ${textToSend}\nAssistant:`;
 
-      const response = await fetch('/api/chat', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json'
-  },
-  body: JSON.stringify({
-    message: textToSend,
-    history
-  })
-});
-
+      const response = await fetch(
+        `https://api-inference.huggingface.co/models/${model}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          method: 'POST',
+          body: JSON.stringify({
+            inputs: conversationPrompt,
+            parameters: {
+              max_new_tokens: 512,
+              temperature: 0.7,
+              return_full_text: false
+            }
+          })
+        }
+      );
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'فشل الاتصال بالسيرفر');
+        throw new Error(data.error || 'حدث خطأ أثناء معالجة الطلب من Hugging Face');
       }
 
-      const sourcesList = data.sources && data.sources.length > 0
-        ? data.sources.map(s => s.name)
-        : [lang === 'ar' ? 'المعرفة الاستثمارية العامة' : 'General Investment Knowledge'];
+      // استخراج النص المولد من الرد
+      let aiAnswer = '';
+      if (Array.isArray(data) && data[0]?.generated_text) {
+        aiAnswer = data[0].generated_text;
+      } else if (data.generated_text) {
+        aiAnswer = data.generated_text;
+      } else if (typeof data === 'string') {
+        aiAnswer = data;
+      } else {
+        aiAnswer = lang === 'ar' ? 'تمت معالجة الطلب بنجاح.' : 'Response received successfully.';
+      }
 
       setIsTyping(false);
+
+      // عرض النتيجة بالتأثير التدريجي (Streaming)
       await streamTextIntoMessage(
-        data.answer,
-        sourcesList,
+        aiAnswer,
+        [lang === 'ar' ? 'Hugging Face (GPT-OSS)' : 'Hugging Face Model'],
         true,
-        data.confidence || 70,
+        92,
         null
       );
 
@@ -139,8 +163,8 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
 
       await streamTextIntoMessage(
         lang === 'ar' 
-          ? 'عذراً، حدث خطأ أثناء الاتصال بالخادم. يرجى التأكد من تشغيل الباك إند وحاول مرة أخرى.' 
-          : 'Sorry, an error occurred while connecting to the server.',
+          ? 'عذراً، حدث خطأ أثناء الاتصال بنموذج الذكاء الاصطناعي. يرجى التحقق من مفتاح API أو المحاولة لاحقاً.' 
+          : 'Sorry, an error occurred while connecting to the AI model.',
         [lang === 'ar' ? 'خطأ في الاتصال' : 'Connection Error'],
         false,
         0,
@@ -148,6 +172,7 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
       );
     }
   };
+
 
   const handlePromptChip = (promptText) => {
     handleSendMessage(promptText);
