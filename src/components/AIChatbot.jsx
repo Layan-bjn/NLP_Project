@@ -76,7 +76,7 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
     }
   };
 
-  // إرسال الرسالة إلى Hugging Face API مباشرة
+  // إرسال الرسالة عبر Hugging Face Router API (OpenAI Compatible Format)
   const handleSendMessage = async (textToSend = inputMsg) => {
     if (!textToSend.trim()) return;
 
@@ -95,65 +95,52 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
     setIsTyping(true);
 
     try {
-      // قراءة المفتاح والموديل من متغيّرات بيئة Vite أو من الـ Modal
-      const token = apiKey || import.meta.env.VITE_HF_TOKEN;
-      const model = import.meta.env.VITE_HF_MODEL || 'openai/gpt-oss-120b:fastest';
+      const token = apiKey || import.meta.env.VITE_HF_TOKEN ;
+      const model = import.meta.env.VITE_HF_MODEL;
 
-      if (!token) {
-        throw new Error('مفتاح API غير متوفر');
-      }
-
-      // بناء نص المحادثة مع الـ History ليدعم سياق الحوار
-      const conversationPrompt = messages
-        .filter(m => m.text)
-        .map(m => `${m.sender === 'user' ? 'User' : 'Assistant'}: ${m.text}`)
-        .join('\n') + `\nUser: ${textToSend}\nAssistant:`;
-
-      const response = await fetch(
-        `https://api-inference.huggingface.co/models/${model}`,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'Content-Type': 'application/json'
-          },
-          method: 'POST',
-          body: JSON.stringify({
-            inputs: conversationPrompt,
-            parameters: {
-              max_new_tokens: 512,
-              temperature: 0.7,
-              return_full_text: false
-            }
-          })
-        }
-      );
+      // الرابط الجديد والمعتمد من Hugging Face
+      const response = await fetch('https://router.huggingface.co/hf-inference/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: model,
+          messages: [
+            {
+              role: 'system',
+              content: lang === 'ar' 
+                ? 'أنت مساعد ذكي يجيب باختصار عن الاستثمار.' 
+                : 'You are a helpful investment assistant.'
+            },
+            ...messages.filter(m => m.text).map(m => ({
+              role: m.sender === 'user' ? 'user' : 'assistant',
+              content: m.text
+            })),
+            { role: 'user', content: textToSend }
+          ],
+          max_tokens: 150,
+          temperature: 0.7
+        })
+      });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'حدث خطأ أثناء معالجة الطلب من Hugging Face');
+        throw new Error(data.error?.message || data.error || 'فشل الاتصال بالنموذج');
       }
 
-      // استخراج النص المولد من الرد
-      let aiAnswer = '';
-      if (Array.isArray(data) && data[0]?.generated_text) {
-        aiAnswer = data[0].generated_text;
-      } else if (data.generated_text) {
-        aiAnswer = data.generated_text;
-      } else if (typeof data === 'string') {
-        aiAnswer = data;
-      } else {
-        aiAnswer = lang === 'ar' ? 'تمت معالجة الطلب بنجاح.' : 'Response received successfully.';
-      }
+      // استخراج النص الناتج من الرد الموحد
+      const aiAnswer = data.choices?.[0]?.message?.content || (lang === 'ar' ? 'تم استلام الرد.' : 'Response received.');
 
       setIsTyping(false);
 
-      // عرض النتيجة بالتأثير التدريجي (Streaming)
       await streamTextIntoMessage(
         aiAnswer,
-        [lang === 'ar' ? 'Hugging Face (GPT-OSS)' : 'Hugging Face Model'],
+        [lang === 'ar' ? 'نموذج GPT-2' : 'GPT-2 Model'],
         true,
-        92,
+        80,
         null
       );
 
@@ -163,7 +150,7 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
 
       await streamTextIntoMessage(
         lang === 'ar' 
-          ? 'عذراً، حدث خطأ أثناء الاتصال بنموذج الذكاء الاصطناعي. يرجى التحقق من مفتاح API أو المحاولة لاحقاً.' 
+          ? 'عذراً، حدث خطأ أثناء الاتصال بنموذج الذكاء الاصطناعي. يرجى التأكد من مفتاح API.' 
           : 'Sorry, an error occurred while connecting to the AI model.',
         [lang === 'ar' ? 'خطأ في الاتصال' : 'Connection Error'],
         false,
@@ -172,6 +159,7 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
       );
     }
   };
+
 
 
   const handlePromptChip = (promptText) => {
