@@ -32,7 +32,7 @@ export default function Navbar({ lang, setLang, t, openApiKeyModal, apiKey }) {
             <div className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-makkah-navy-800 to-makkah-navy-600 p-0.5 shadow-md group-hover:scale-105 transition-transform">
               <div className="w-full h-full bg-white rounded-[10px] flex items-center justify-center relative overflow-hidden">
                 {/* SVG Mini Brand Wave */}
-                <img src="public/logo.jpg" alt="Company Logo" />
+                <img src="/logo.jpg" alt="Company Logo" />
               </div>
             </div>
             <div className="flex flex-col">
