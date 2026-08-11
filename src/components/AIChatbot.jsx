@@ -1,9 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
 import { 
   Bot, Send, Key, Trash2, User, Copy, Check, Shield, Volume2, 
-  Search, ThumbsUp, ThumbsDown, Download
+  Search, ThumbsUp, ThumbsDown, Download, Layers
 } from 'lucide-react';
 
 export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
@@ -26,14 +24,6 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
   const [activeCategory, setActiveCategory] = useState('all');
   const [copiedId, setCopiedId] = useState(null);
   const [feedbackState, setFeedbackState] = useState({});
-
-  // تنظيف بسيط للأسطر الزائدة مع الحفاظ على تنسيق Markdown والجداول
-  const cleanAIResponse = (text = '') => {
-    return text
-      .replace(/\r\n/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-  };
 
   const messagesEndRef = useRef(null);
 
@@ -64,7 +54,7 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
       }
     ]);
 
-    const words = cleanAIResponse(fullText).split(' ');
+    const words = fullText.split(' ');
     let currentText = '';
 
     for (let i = 0; i < words.length; i++) {
@@ -72,11 +62,11 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
       const updatedText = currentText;
 
       setMessages(prev => prev.map(m => m.id === msgId ? { ...m, text: updatedText } : m));
-      await new Promise(r => setTimeout(r, 15));
+      await new Promise(r => setTimeout(r, 20));
     }
   };
 
-  // إرسال الرسالة عبر Hugging Face Router API (OpenAI Compatible Format)
+  // إرسال الرسالة إلى الباك إند
   const handleSendMessage = async (textToSend = inputMsg) => {
     if (!textToSend.trim()) return;
 
@@ -95,52 +85,42 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
     setIsTyping(true);
 
     try {
-      const token = apiKey || import.meta.env.VITE_HF_TOKEN ;
-      const model = import.meta.env.VITE_HF_MODEL;
+      // تجهيز سجل المحادثة القصير للنموذج
+      const history = messages
+        .filter(m => m.text)
+        .map(m => ({
+          role: m.sender === 'user' ? 'user' : 'assistant',
+          content: m.text
+        }));
 
-      // الرابط الجديد والمعتمد من Hugging Face
-      const response = await fetch('https://router.huggingface.co/hf-inference/v1/chat/completions', {
+      // استدعاء السيرفر (Express Backend)
+      const response = await fetch('http://localhost:5000/api/chat', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          model: model,
-          messages: [
-            {
-              role: 'system',
-              content: lang === 'ar' 
-                ? 'أنت مساعد ذكي يجيب باختصار عن الاستثمار.' 
-                : 'You are a helpful investment assistant.'
-            },
-            ...messages.filter(m => m.text).map(m => ({
-              role: m.sender === 'user' ? 'user' : 'assistant',
-              content: m.text
-            })),
-            { role: 'user', content: textToSend }
-          ],
-          max_tokens: 150,
-          temperature: 0.7
+          message: textToSend,
+          history
         })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error?.message || data.error || 'فشل الاتصال بالنموذج');
+        throw new Error(data.error || 'فشل الاتصال بالسيرفر');
       }
 
-      // استخراج النص الناتج من الرد الموحد
-      const aiAnswer = data.choices?.[0]?.message?.content || (lang === 'ar' ? 'تم استلام الرد.' : 'Response received.');
+      const sourcesList = data.sources && data.sources.length > 0
+        ? data.sources.map(s => s.name)
+        : [lang === 'ar' ? 'المعرفة الاستثمارية العامة' : 'General Investment Knowledge'];
 
       setIsTyping(false);
-
       await streamTextIntoMessage(
-        aiAnswer,
-        [lang === 'ar' ? 'نموذج GPT-2' : 'GPT-2 Model'],
+        data.answer,
+        sourcesList,
         true,
-        80,
+        data.confidence || 70,
         null
       );
 
@@ -150,8 +130,8 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
 
       await streamTextIntoMessage(
         lang === 'ar' 
-          ? 'عذراً، حدث خطأ أثناء الاتصال بنموذج الذكاء الاصطناعي. يرجى التأكد من مفتاح API.' 
-          : 'Sorry, an error occurred while connecting to the AI model.',
+          ? 'عذراً، حدث خطأ أثناء الاتصال بالخادم. يرجى التأكد من تشغيل الباك إند وحاول مرة أخرى.' 
+          : 'Sorry, an error occurred while connecting to the server.',
         [lang === 'ar' ? 'خطأ في الاتصال' : 'Connection Error'],
         false,
         0,
@@ -159,8 +139,6 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
       );
     }
   };
-
-
 
   const handlePromptChip = (promptText) => {
     handleSendMessage(promptText);
@@ -179,16 +157,14 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
   const speakText = (text) => {
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
-      // إزالة رموز الماركداون فقط عند القراءة الصوتية لكي لا يقرأ النجوم والرموز
-      const textToRead = text.replace(/[*_#`~]/g, '');
-      const utterance = new SpeechSynthesisUtterance(textToRead);
+      const utterance = new SpeechSynthesisUtterance(text.replace(/[#*|_]/g, ''));
       utterance.lang = lang === 'ar' ? 'ar-SA' : 'en-US';
       window.speechSynthesis.speak(utterance);
     }
   };
 
   const exportTranscript = () => {
-    const transcriptText = messages.map(m => `[${m.timestamp}] ${m.sender.toUpperCase()}: ${cleanAIResponse(m.text)}`).join('\n\n');
+    const transcriptText = messages.map(m => `[${m.timestamp}] ${m.sender.toUpperCase()}: ${m.text}`).join('\n\n');
     const blob = new Blob([transcriptText], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -308,7 +284,7 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
             {messages.map((msg) => (
               <div
                 key={msg.id}
-                className={`flex gap-3 max-w-[95%] sm:max-w-[88%] ${
+                className={`flex gap-3 max-w-[90%] sm:max-w-[82%] ${
                   msg.sender === 'user' ? (lang === 'ar' ? 'mr-auto flex-row-reverse' : 'ml-auto flex-row-reverse') : ''
                 }`}
               >
@@ -327,31 +303,13 @@ export default function AIChatbot({ t, lang, apiKey, openApiKeyModal }) {
                     ? 'bg-makkah-emerald-600 text-white rounded-tr-none'
                     : 'bg-white border border-slate-200 text-slate-800 rounded-tl-none'
                 }`}>
-                  {/* منطقة عرض النص المنسق يدعم الماركداون والجداول */}
-                  <div className="space-y-2 text-right overflow-x-auto" dir={lang === 'ar' ? 'rtl' : 'ltr'}>
-                    {msg.sender === 'user' ? (
-                      <p className="whitespace-pre-wrap">{msg.text}</p>
-                    ) : (
-                      <div className="prose prose-sm max-w-none text-slate-800 
-                                      prose-headings:text-makkah-navy-800 prose-headings:font-bold prose-headings:my-2
-                                      prose-p:my-1 prose-p:leading-relaxed
-                                      prose-ul:list-disc prose-ul:pr-5 prose-ul:my-2
-                                      prose-ol:list-decimal prose-ol:pr-5 prose-ol:my-2
-                                      prose-li:my-0.5
-                                      prose-strong:text-makkah-navy-900 prose-strong:font-extrabold
-                                      prose-table:w-full prose-table:border-collapse prose-table:my-3 prose-table:border prose-table:border-slate-300
-                                      prose-th:bg-slate-100 prose-th:p-2.5 prose-th:border prose-th:border-slate-300 prose-th:text-xs prose-th:font-bold prose-th:text-slate-700
-                                      prose-td:p-2.5 prose-td:border prose-td:border-slate-200 prose-td:text-xs text-slate-600">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                          {msg.text || (isTyping ? '...' : '')}
-                        </ReactMarkdown>
-                      </div>
-                    )}
+                  <div className="space-y-2 whitespace-pre-line font-normal">
+                    {msg.text || (isTyping && msg.sender === 'bot' ? '...' : '')}
                   </div>
 
                   {/* Confidence Badge */}
                   {msg.sender === 'bot' && msg.text && msg.confidence !== null && (
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold border bg-emerald-50 text-emerald-700 border-emerald-200">
                         <Shield className="w-3 h-3" />
                         {lang === 'ar' ? `مستوى الثقة: ${msg.confidence}%` : `Confidence: ${msg.confidence}%`}
