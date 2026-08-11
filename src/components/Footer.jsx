@@ -14,7 +14,7 @@ export default function Footer({ t, lang }) {
           <div className="lg:col-span-5 space-y-4">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-white p-0.5 shadow-md flex items-center justify-center">
-               <img class="rounded-xl" src="public\logo.jpg" alt="logo" />
+               <img class="rounded-xl" src="../public/logo.jpg" alt="logo" />
               </div>
               <div>
                 <h3 className="font-extrabold text-lg text-white">
