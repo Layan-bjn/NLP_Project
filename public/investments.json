@@ -1,0 +1,57 @@
+[
+  {
+    "id": 1,
+    "name": "Green Horizon Real Estate Fund",
+    "type": "Real Estate",
+    "sector": "Property",
+    "minimumInvestment": 50000,
+    "expectedReturn": 8,
+    "risk": "Medium",
+    "duration": "3 years",
+    "description": "A real estate fund focused on commercial and residential properties."
+  },
+  {
+    "id": 2,
+    "name": "Tech Growth Fund",
+    "type": "Technology",
+    "sector": "Technology",
+    "minimumInvestment": 25000,
+    "expectedReturn": 12,
+    "risk": "High",
+    "duration": "5 years",
+    "description": "A technology-focused fund investing in growth-stage technology companies."
+  },
+  {
+    "id": 3,
+    "name": "Saudi Infrastructure Fund",
+    "type": "Infrastructure",
+    "sector": "Infrastructure",
+    "minimumInvestment": 100000,
+    "expectedReturn": 7,
+    "risk": "Low",
+    "duration": "4 years",
+    "description": "A fund focused on infrastructure projects in Saudi Arabia."
+  },
+  {
+    "id": 4,
+    "name": "Healthcare Innovation Fund",
+    "type": "Healthcare",
+    "sector": "Healthcare",
+    "minimumInvestment": 40000,
+    "expectedReturn": 10,
+    "risk": "Medium",
+    "duration": "4 years",
+    "description": "A fund investing in healthcare innovation and medical technology."
+  },
+  {
+    "id": 5,
+    "name": "Sustainable Energy Fund",
+    "type": "Renewable Energy",
+    "sector": "Energy",
+    "minimumInvestment": 30000,
+    "expectedReturn": 9,
+    "risk": "Medium",
+    "duration": "5 years",
+    "description": "A fund investing in renewable and sustainable energy projects."
+  }
+]
